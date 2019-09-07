@@ -41,14 +41,14 @@ fn main() -> Result<(), Error> {
     let mut rng = rand::thread_rng();
     let mut i = 0;
     while i != num_values || num_values == 0 {
-        println!("{}", fuzz(&mut rng, &schema));
+        println!("{}", fuzz(&schema, &mut rng, &schema));
         i += 1;
     }
 
     Ok(())
 }
 
-fn fuzz<R: rand::Rng + ?Sized>(rng: &mut R, schema: &Schema) -> Value {
+fn fuzz<R: rand::Rng + ?Sized>(root: &Schema, rng: &mut R, schema: &Schema) -> Value {
     match schema.form() {
         Form::Empty => fuzz_any(rng),
         Form::Type(Type::Boolean) => fuzz_bool(rng),
@@ -63,16 +63,20 @@ fn fuzz<R: rand::Rng + ?Sized>(rng: &mut R, schema: &Schema) -> Value {
         Form::Type(Type::String) => fuzz_string(rng),
         Form::Type(Type::Timestamp) => fuzz_timestamp(rng),
         Form::Enum(ref vals) => fuzz_enum(rng, vals),
-        Form::Elements(ref sub_schema) => fuzz_elems(rng, sub_schema),
+        Form::Elements(ref sub_schema) => fuzz_elems(root, rng, sub_schema),
         Form::Properties {
             required,
             optional,
             allow_additional,
             ..
-        } => fuzz_props(rng, required, optional, *allow_additional),
-        Form::Values(ref sub_schema) => fuzz_values(rng, sub_schema),
-        Form::Discriminator(ref tag, ref mapping) => fuzz_discr(rng, tag, mapping),
-        _ => panic!(),
+        } => fuzz_props(root, rng, required, optional, *allow_additional),
+        Form::Values(ref sub_schema) => fuzz_values(root, rng, sub_schema),
+        Form::Discriminator(ref tag, ref mapping) => fuzz_discr(root, rng, tag, mapping),
+        Form::Ref(def) => fuzz(
+            root,
+            rng,
+            root.definitions().as_ref().unwrap().get(def).unwrap(),
+        ),
     }
 }
 
@@ -145,14 +149,15 @@ fn fuzz_enum<R: rand::Rng + ?Sized>(rng: &mut R, vals: &HashSet<String>) -> Valu
     vals.iter().choose(rng).unwrap().clone().into()
 }
 
-fn fuzz_elems<R: rand::Rng + ?Sized>(rng: &mut R, sub_schema: &Schema) -> Value {
+fn fuzz_elems<R: rand::Rng + ?Sized>(root: &Schema, rng: &mut R, sub_schema: &Schema) -> Value {
     (0..rng.gen_range(0, 8))
-        .map(|_| fuzz(rng, sub_schema))
+        .map(|_| fuzz(root, rng, sub_schema))
         .collect::<Vec<_>>()
         .into()
 }
 
 fn fuzz_props<R: rand::Rng + ?Sized>(
+    root: &Schema,
     rng: &mut R,
     required: &HashMap<String, Schema>,
     optional: &HashMap<String, Schema>,
@@ -161,12 +166,12 @@ fn fuzz_props<R: rand::Rng + ?Sized>(
     let mut vals = Vec::new();
 
     for (k, v) in required {
-        vals.push((k.clone(), fuzz(rng, v)));
+        vals.push((k.clone(), fuzz(root, rng, v)));
     }
 
     for (k, v) in optional {
         if rng.gen() {
-            vals.push((k.clone(), fuzz(rng, v)));
+            vals.push((k.clone(), fuzz(root, rng, v)));
         }
     }
 
@@ -181,12 +186,12 @@ fn fuzz_props<R: rand::Rng + ?Sized>(
         .into()
 }
 
-fn fuzz_values<R: rand::Rng + ?Sized>(rng: &mut R, sub_schema: &Schema) -> Value {
+fn fuzz_values<R: rand::Rng + ?Sized>(root: &Schema, rng: &mut R, sub_schema: &Schema) -> Value {
     (0..rng.gen_range(0, 8))
         .map(|_| {
             (
                 fuzz_string(rng).as_str().unwrap().to_owned(),
-                fuzz(rng, sub_schema),
+                fuzz(root, rng, sub_schema),
             )
         })
         .collect::<serde_json::Map<String, Value>>()
@@ -194,12 +199,13 @@ fn fuzz_values<R: rand::Rng + ?Sized>(rng: &mut R, sub_schema: &Schema) -> Value
 }
 
 fn fuzz_discr<R: rand::Rng + ?Sized>(
+    root: &Schema,
     rng: &mut R,
     tag: &str,
     mapping: &HashMap<String, Schema>,
 ) -> Value {
     let (tag_val, sub_schema) = mapping.iter().choose(rng).unwrap();
-    let mut obj = fuzz(rng, sub_schema);
+    let mut obj = fuzz(root, rng, sub_schema);
     obj.as_object_mut()
         .unwrap()
         .insert(tag.to_owned(), tag_val.clone().into());
