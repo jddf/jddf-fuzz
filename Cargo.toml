@@ -1,0 +1,13 @@
+[package]
+name = "jddf-fuzz"
+version = "0.1.0"
+authors = ["Ulysse Carion <ulyssecarion@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+clap = "2.33"
+jddf = "0.3.0"
+serde_json = "1.0"
+failure = "0.1"
+rand = "0.6"
+chrono = "0.4"
