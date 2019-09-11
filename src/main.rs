@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io;
 
 fn main() -> Result<(), Error> {
-    let matches = App::new("jsl-fuzz")
+    let matches = App::new("jddf-fuzz")
         .version("0.1")
         .about("Creates random JSON documents satisfying a JDDF schema")
         .setting(AppSettings::ColoredHelp)
