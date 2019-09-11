@@ -39,7 +39,7 @@ Here's a schema that uses all jddf features:
         "properties": {
           "any": {},
           "bool": { "type": "boolean" },
-          "num": { "type": "number" },
+          "num": { "type": "float64" },
           "str": { "type": "string" },
           "ts": { "type": "timestamp" }
         },
